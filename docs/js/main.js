@@ -78,7 +78,18 @@ function maybeScrollToHash() {
   }
 }
 
+function toc(){
+  $("#content").wrapInner('<div class="span11"></div>')
+  $("#markdown-toc").appendTo("#content")
+  $("#markdown-toc").wrap('<nav id="myScrollspy" class="span1"></nav>')
+  $("#markdown-toc").addClass('nav nav-pills nav-stacked affix')
+  $("#markdown-toc").attr('data-spy','affix')
+  $("#content").wrapInner('<div class="row-fluid"></div>')
+}
+
 $(function() {
+  toc();
+
   codeTabs();
   // Display anchor links when hovering over headers. For documentation of the
   // configuration options, see the AnchorJS documentation.
@@ -94,4 +105,5 @@ $(function() {
   // Scroll now too in case we had opened the page on a hash, but wait a bit because some browsers
   // will try to do *their* initial scroll after running the onReady handler.
   $(window).load(function() { setTimeout(function() { maybeScrollToHash(); }, 25); }); 
+
 });
