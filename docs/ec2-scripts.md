@@ -3,6 +3,9 @@ layout: global
 title: Running Spark on EC2
 ---
 
+* This will become a table of contents (this text will be scraped).
+{:toc}
+
 The `spark-ec2` script, located in Spark's `ec2` directory, allows you
 to launch, manage and shut down Spark clusters on Amazon EC2. It automatically
 sets up Spark and HDFS on the cluster for you. This guide describes 
