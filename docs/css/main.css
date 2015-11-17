@@ -144,6 +144,21 @@ ul.nav li.dropdown ul.dropdown-menu li.dropdown-submenu ul.dropdown-menu {
 }
 
 /**
+ * css for
+ * sidebar
+ */
+
+ /* hide inactive nested list */
+ .docs-sidebar .nav ul > li {
+     display: none;
+ }
+
+ /* show active nested list */
+ .docs-sidebar .nav>.active>ul{
+     display: block;
+ }
+
+/**
  * MathJax (embedded latex formulas)
  */
 .MathJax .mo { color: inherit }

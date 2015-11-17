@@ -81,9 +81,10 @@ function maybeScrollToHash() {
 function toc(){
   $("#content").wrapInner('<div class="span11"></div>')
   $("#markdown-toc").appendTo("#content")
-  $("#markdown-toc").wrap('<nav id="myScrollspy" class="span1"></nav>')
-  $("#markdown-toc").addClass('nav nav-pills nav-stacked affix')
+  $("#markdown-toc").wrap('<nav id="myScrollspy" class="span1 docs-sidebar"></nav>')
+  $("#markdown-toc").addClass('nav nav-pills nav-stacked')
   $("#markdown-toc").attr('data-spy','affix')
+  // $("nav ul").addClass('nav nav-stacked')
   $("#content").wrapInner('<div class="row-fluid"></div>')
 }
 
@@ -104,6 +105,6 @@ $(function() {
 
   // Scroll now too in case we had opened the page on a hash, but wait a bit because some browsers
   // will try to do *their* initial scroll after running the onReady handler.
-  $(window).load(function() { setTimeout(function() { maybeScrollToHash(); }, 25); }); 
+  $(window).load(function() { setTimeout(function() { maybeScrollToHash(); }, 25); });
 
 });
