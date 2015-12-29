@@ -59,4 +59,12 @@ class MiscFunctionsSuite extends SparkFunSuite with ExpressionEvalHelper {
     checkEvaluation(Crc32(Literal.create(null, BinaryType)), null)
     checkConsistencyBetweenInterpretedAndCodegen(Crc32, BinaryType)
   }
+
+  test("aesEncrypt") {
+    checkEvaluation(AesEncrypt(Literal("ABC".getBytes), Literal("ABC".getBytes)), "123")
+  }
+
+  test("aesDecrypt") {
+    checkEvaluation(AesDecrypt(Literal("ABC".getBytes), Literal("ABC".getBytes)), "321")
+  }
 }

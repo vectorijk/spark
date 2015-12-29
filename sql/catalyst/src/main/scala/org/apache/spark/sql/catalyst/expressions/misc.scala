@@ -20,6 +20,8 @@ package org.apache.spark.sql.catalyst.expressions
 import java.security.{MessageDigest, NoSuchAlgorithmException}
 import java.util.zip.CRC32
 
+import javax.crypto.Cipher
+
 import org.apache.commons.codec.digest.DigestUtils
 
 import org.apache.spark.sql.catalyst.expressions.codegen._
@@ -174,5 +176,55 @@ case class Crc32(child: Expression) extends UnaryExpression with ImplicitCastInp
         ${ev.value} = checksum.getValue();
       """
     })
+  }
+}
+
+/**
+ * A function that computes
+ */
+@ExpressionDescription(
+  usage = "_FUNC_(input) - Returns"
+)
+case class AesEncrypt(left: Expression, right: Expression)
+  extends BinaryExpression with ImplicitCastInputTypes {
+
+  override def dataType: DataType = StringType
+  override def nullable: Boolean = true
+
+  override def inputTypes: Seq[DataType] = Seq(BinaryType, BinaryType)
+
+  protected override def nullSafeEval(input1: Any, input2: Any): Any = {
+
+  }
+
+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {
+    defineCodeGen(ctx, ev, (left, right) =>
+      s"UTF8String.fromString(org.apache.commons.codec.digest.DigestUtils.shaHex($left))"
+    )
+  }
+}
+
+/**
+ * A function that computes
+ */
+@ExpressionDescription(
+  usage = "_FUNC_(input) - Returns"
+)
+case class AesDecrypt(left: Expression, right: Expression)
+  extends BinaryExpression with ImplicitCastInputTypes {
+
+  override def dataType: DataType = StringType
+  override def nullable: Boolean = true
+
+  override def inputTypes: Seq[DataType] = Seq(BinaryType, BinaryType)
+
+  protected override def nullSafeEval(input1: Any, input2: Any): Any = {
+
+  }
+
+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {
+    defineCodeGen(ctx, ev, (left, right) =>
+      s"UTF8String.fromString(org.apache.commons.codec.digest.DigestUtils.shaHex($right))"
+    )
   }
 }
