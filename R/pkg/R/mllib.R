@@ -45,6 +45,11 @@ setClass("AFTSurvivalRegressionModel", representation(jobj = "jobj"))
 #' @export
 setClass("KMeansModel", representation(jobj = "jobj"))
 
+#' @title S4 class that represents a KMeansModel
+#' @param jobj a Java object reference to the backing Scala KMeansModel
+#' @export
+setClass("DecisionTreeRegressionModel", representation(jobj = "jobj"))
+
 #' Fits a generalized linear model
 #'
 #' Fits a generalized linear model against a Spark DataFrame.
@@ -599,6 +604,53 @@ setMethod("summary", signature(object = "AFTSurvivalRegressionModel"),
 #' showDF(predicted)
 #' }
 setMethod("predict", signature(object = "AFTSurvivalRegressionModel"),
+          function(object, newData) {
+            return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
+          })
+
+#' Fit an accelerated failure time (AFT) survival regression model.
+#'
+#' Fit an accelerated failure time (AFT) survival regression model on a Spark DataFrame.
+#'
+#' @param data SparkDataFrame for training.
+#' @param formula A symbolic description of the model to be fitted. Currently only a few formula
+#'                operators are supported, including '~', ':', '+', and '-'.
+#'                Note that operator '.' is not supported currently.
+#' @return a fitted AFT survival regression model
+#' @rdname spark.decisionTreeRegressor
+#' @seealso survival: \url{https://cran.r-project.org/web/packages/survival/}
+#' @export
+#' @examples
+#' \dontrun{
+#' df <- createDataFrame(ovarian)
+#' model <- spark.survreg(df, Surv(futime, fustat) ~ ecog_ps + rx)
+#' }
+setMethod("spark.decisionTreeRegressor", signature(data = "SparkDataFrame", formula = "formula"),
+  function(data, formula, maxDepth = 5, maxBins = 32, ...) {
+    formula <- paste(deparse(formula), collapse = "")
+    jobj <- callJStatic("org.apache.spark.ml.r.DecisionTreeRegressorWrapper", "fit",
+    data@sdf, formula, maxDepth, maxBins)
+    return(new("DecisionTreeRegressionModel", jobj = jobj))
+  })
+
+setMethod("summary", signature(object = "DecisionTreeRegressionModel"),
+  function(object, ...) {
+    jobj <- object@jobj
+    features <- callJMethod(jobj, "rFeatures")
+    labels <- callJMethod(jobj, "rLabels")
+    return(list(coefficients = coefficients))
+  })
+
+setMethod("write.ml", signature(object = "DecisionTreeRegressionModel", path = "character"),
+  function(object, path, overwrite = FALSE) {
+    writer <- callJMethod(object@jobj, "write")
+    if (overwrite) {
+        writer <- callJMethod(writer, "overwrite")
+    }
+    invisible(callJMethod(writer, "save", path))
+  })
+
+setMethod("predict", signature(object = "DecisionTreeRegressionModel"),
           function(object, newData) {
             return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
           })

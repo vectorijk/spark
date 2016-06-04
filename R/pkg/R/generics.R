@@ -1238,6 +1238,13 @@ setGeneric("spark.naiveBayes", function(data, formula, ...) { standardGeneric("s
 #' @export
 setGeneric("spark.survreg", function(data, formula, ...) { standardGeneric("spark.survreg") })
 
+#' @rdname spark.decisionTreeRegressor
+#' @export
+setGeneric("spark.decisionTreeRegressor",
+           function(data, formula, ...) {
+             standardGeneric("spark.decisionTreeRegressor")
+           })
+
 #' @rdname write.ml
 #' @export
 setGeneric("write.ml", function(object, path, ...) { standardGeneric("write.ml") })
