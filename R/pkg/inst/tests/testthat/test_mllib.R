@@ -454,4 +454,8 @@ test_that("spark.survreg", {
   }
 })
 
+test_that("spark.rpart", {
+
+})
+
 sparkR.session.stop()

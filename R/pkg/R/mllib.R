@@ -76,6 +76,13 @@ NULL
 #' @seealso \link{spark.kmeans}, \link{spark.naiveBayes}, \link{spark.survreg}
 NULL
 
+#' S4 class that represents a DecisionTreeRegressionModel
+#'
+#' @param jobj a Java object reference to the backing Scala DecisionTreeRegressionModel
+#' @export
+#' @note DecisionTreeRegressionModel since 2.0.0
+setClass("DecisionTreeRegressionModel", representation(jobj = "jobj"))
+
 #' Generalized Linear Models
 #'
 #' Fits generalized linear model against a Spark DataFrame.
@@ -526,6 +533,31 @@ setMethod("write.ml", signature(object = "KMeansModel", path = "character"),
             invisible(callJMethod(writer, "save", path))
           })
 
+#' Save the Decision Tree Regression model to the input path.
+#'
+#' @param object A fitted Decision tree regression model
+#' @param path The directory where the model is saved
+#' @param overwrite Overwrites or not if the output path already exists. Default is FALSE
+#'                  which means throw exception if the output path exists.
+#'
+#' @rdname write.ml
+#' @name write.ml
+#' @export
+#' @examples
+#' \dontrun{
+#' model <- spark.rpart(trainingData, Kyphosis ~ Age + Number + Start)
+#' path <- "path/to/model"
+#' write.ml(model, path)
+#' }
+setMethod("write.ml", signature(object = "DecisionTreeRegressionModel", path = "character"),
+          function(object, path, overwrite = FALSE) {
+            writer <- callJMethod(object@jobj, "write")
+            if (overwrite) {
+              writer <- callJMethod(writer, "overwrite")
+            }
+            invisible(callJMethod(writer, "save", path))
+          })
+
 #' Load a fitted MLlib model from the input path.
 #'
 #' @param path Path of the model to read.
@@ -551,6 +583,8 @@ read.ml <- function(path) {
       return(new("GeneralizedLinearRegressionModel", jobj = jobj))
   } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.KMeansWrapper")) {
       return(new("KMeansModel", jobj = jobj))
+  } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.DecisionTreeRegressorWrapper")) {
+      return(new("DecisionTreeRegressionModel", jobj = jobj))
   } else {
     stop(paste("Unsupported model: ", jobj))
   }
@@ -629,6 +663,44 @@ setMethod("summary", signature(object = "AFTSurvivalRegressionModel"),
 #' @export
 #' @note predict(AFTSurvivalRegressionModel) since 2.0.0
 setMethod("predict", signature(object = "AFTSurvivalRegressionModel"),
+          function(object, newData) {
+            return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
+          })
+
+#' Fit a decision tree regression model.
+#'
+#' Fit Decision Tree regression model on a SparkDataFrame.
+#'
+#' @param data SparkDataFrame for training.
+#' @param formula A symbolic description of the model to be fitted. Currently only a few formula
+#'                operators are supported, including '~', ':', '+', and '-'.
+#'                Note that operator '.' is not supported currently.
+#' @return a fitted decision tree regression model
+#' @rdname spark.decisionTreeRegressor
+#' @seealso rpart: \url{https://cran.r-project.org/web/packages/rpart/}
+#' @export
+#' @examples
+#' \dontrun{
+#' df <- createDataFrame(sqlContext, kyphosis)
+#' model <- spark.rpart(df, Kyphosis ~ Age + Number + Start)
+#' }
+setMethod("spark.rpart", signature(data = "SparkDataFrame", formula = "formula"),
+  function(data, formula) {
+    formula <- paste(deparse(formula), collapse = "")
+    jobj <- callJStatic("org.apache.spark.ml.r.DecisionTreeRegressorWrapper", "fit",
+    data@sdf, formula)
+    return(new("DecisionTreeRegressionModel", jobj = jobj))
+  })
+
+setMethod("summary", signature(object = "DecisionTreeRegressionModel"),
+          function(object, ...) {
+            jobj <- object@jobj
+            maxDepth <- callJMethod(jobj, "maxDepth")
+            maxBins <- callJMethod(jobj, "maxBins")
+            return(list(maxDepth = maxDepth, maxBins = maxBins))
+          })
+
+setMethod("predict", signature(object = "DecisionTreeRegressionModel"),
           function(object, newData) {
             return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
           })
