@@ -60,6 +60,13 @@ setClass("KMeansModel", representation(jobj = "jobj"))
 #' @note GaussianMixtureModel since 2.1.0
 setClass("GaussianMixtureModel", representation(jobj = "jobj"))
 
+#' S4 class that represents an ALSModel
+#'
+#' @param jobj a Java object reference to the backing Scala ALSWrapper
+#' @export
+#' @note ALSModel since 2.1.0
+setClass("ALSModel", representation(jobj = "jobj"))
+
 #' Saves the MLlib model to the input path
 #'
 #' Saves the MLlib model to the input path. For more information, see the specific
@@ -67,8 +74,8 @@ setClass("GaussianMixtureModel", representation(jobj = "jobj"))
 #' @rdname write.ml
 #' @name write.ml
 #' @export
-#' @seealso \link{spark.glm}, \link{glm}, \link{spark.mvnormalmixEM}
-#' @seealso \link{spark.kmeans}, \link{spark.naiveBayes}, \link{spark.survreg}
+#' @seealso \link{spark.glm}, \link{glm}
+#' @seealso \link{spark.als}, \link{spark.kmeans}, \link{spark.naiveBayes}, \link{spark.survreg}
 #' @seealso \link{read.ml}
 NULL
 
@@ -89,6 +96,10 @@ NULL
 #' @export
 #' @note DecisionTreeRegressionModel since 2.0.0
 setClass("DecisionTreeRegressionModel", representation(jobj = "jobj"))
+
+#' @seealso \link{spark.glm}, \link{glm}
+#' @seealso \link{spark.als}, \link{spark.kmeans}, \link{spark.naiveBayes}, \link{spark.survreg}
+NULL
 
 #' Generalized Linear Models
 #'
@@ -600,6 +611,8 @@ read.ml <- function(path) {
       return(new("DecisionTreeRegressionModel", jobj = jobj))
   } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.GaussianMixtureWrapper")) {
       return(new("GaussianMixtureModel", jobj = jobj))
+  } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.ALSWrapper")) {
+      return(new("ALSModel", jobj = jobj))
   } else {
     stop(paste("Unsupported model: ", jobj))
   }
@@ -826,3 +839,146 @@ setMethod("predict", signature(object = "GaussianMixtureModel"),
           function(object, newData) {
             return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
           })
+
+#' Alternating Least Squares (ALS) for Collaborative Filtering
+#'
+#' \code{spark.als} learns latent factors in collaborative filtering via alternating least
+#' squares. Users can call \code{summary} to obtain fitted latent factors, \code{predict}
+#' to make predictions on new data, and \code{write.ml}/\code{read.ml} to save/load fitted models.
+#'
+#' For more details, see
+#' \href{http://spark.apache.org/docs/latest/ml-collaborative-filtering.html}{MLlib:
+#' Collaborative Filtering}.
+#' Additional arguments can be passed to the methods.
+#' \describe{
+#'    \item{nonnegative}{logical value indicating whether to apply nonnegativity constraints.
+#'                       Default: FALSE}
+#'    \item{implicitPrefs}{logical value indicating whether to use implicit preference.
+#'                         Default: FALSE}
+#'    \item{alpha}{alpha parameter in the implicit preference formulation (>= 0). Default: 1.0}
+#'    \item{seed}{integer seed for random number generation. Default: 0}
+#'    \item{numUserBlocks}{number of user blocks used to parallelize computation (> 0).
+#'                         Default: 10}
+#'    \item{numItemBlocks}{number of item blocks used to parallelize computation (> 0).
+#'                         Default: 10}
+#'    \item{checkpointInterval}{number of checkpoint intervals (>= 1) or disable checkpoint (-1).
+#'                              Default: 10}
+#'    }
+#'
+#' @param data A SparkDataFrame for training
+#' @param ratingCol column name for ratings
+#' @param userCol column name for user ids. Ids must be (or can be coerced into) integers
+#' @param itemCol column name for item ids. Ids must be (or can be coerced into) integers
+#' @param rank rank of the matrix factorization (> 0)
+#' @param reg regularization parameter (>= 0)
+#' @param maxIter maximum number of iterations (>= 0)
+
+#' @return \code{spark.als} returns a fitted ALS model
+#' @rdname spark.als
+#' @aliases spark.als,SparkDataFrame
+#' @name spark.als
+#' @export
+#' @examples
+#' \dontrun{
+#' df <- createDataFrame(ratings)
+#' model <- spark.als(df, "rating", "user", "item")
+#'
+#' # extract latent factors
+#' stats <- summary(model)
+#' userFactors <- stats$userFactors
+#' itemFactors <- stats$itemFactors
+#'
+#' # make predictions
+#' predicted <- predict(model, df)
+#' showDF(predicted)
+#'
+#' # save and load the model
+#' path <- "path/to/model"
+#' write.ml(model, path)
+#' savedModel <- read.ml(path)
+#' summary(savedModel)
+#'
+#' # set other arguments
+#' modelS <- spark.als(df, "rating", "user", "item", rank = 20,
+#'                     reg = 0.1, nonnegative = TRUE)
+#' statsS <- summary(modelS)
+#' }
+#' @note spark.als since 2.1.0
+setMethod("spark.als", signature(data = "SparkDataFrame"),
+          function(data, ratingCol = "rating", userCol = "user", itemCol = "item",
+                   rank = 10, reg = 1.0, maxIter = 10, ...) {
+
+            `%||%` <- function(a, b) if (!is.null(a)) a else b
+
+            args <- list(...)
+            numUserBlocks <- args$numUserBlocks %||% 10
+            numItemBlocks <- args$numItemBlocks %||% 10
+            implicitPrefs <- args$implicitPrefs %||% FALSE
+            alpha <- args$alpha %||% 1.0
+            nonnegative <- args$nonnegative %||% FALSE
+            checkpointInterval <- args$checkpointInterval %||% 10
+            seed <- args$seed %||% 0
+
+            features <- array(c(ratingCol, userCol, itemCol))
+            distParams <- array(as.integer(c(numUserBlocks, numItemBlocks,
+                                             checkpointInterval, seed)))
+
+            jobj <- callJStatic("org.apache.spark.ml.r.ALSWrapper",
+                                "fit", data@sdf, features, as.integer(rank),
+                                reg, as.integer(maxIter), implicitPrefs, alpha, nonnegative,
+                                distParams)
+            return(new("ALSModel", jobj = jobj))
+          })
+
+# Returns a summary of the ALS model produced by spark.als.
+
+#' @param object A fitted ALS model
+#' @return \code{summary} returns a list containing the estimated user and item factors,
+#'         rank, regularization parameter and maximum number of iterations used in training
+#' @rdname spark.als
+#' @export
+#' @note summary(ALSModel) since 2.0.0
+setMethod("summary", signature(object = "ALSModel"),
+function(object, ...) {
+    jobj <- object@jobj
+    userFactors <- dataFrame(callJMethod(jobj, "rUserFactors"))
+    itemFactors <- dataFrame(callJMethod(jobj, "rItemFactors"))
+    rank <- callJMethod(jobj, "rRank")
+    regParam <- callJMethod(jobj, "rRegParam")
+    maxIter <- callJMethod(jobj, "rMaxIter")
+    return(list(userFactors = userFactors, itemFactors = itemFactors, rank = rank,
+                regParam = regParam, maxIter = maxIter))
+})
+
+
+# Makes predictions from an ALS model or a model produced by spark.als.
+
+#' @param newData A SparkDataFrame for testing
+#' @return \code{predict} returns a SparkDataFrame containing predicted values
+#' @rdname spark.als
+#' @export
+#' @note predict(ALSModel) since 2.1.0
+setMethod("predict", signature(object = "ALSModel"),
+function(object, newData) {
+    return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
+})
+
+
+# Saves the ALS model to the input path.
+
+#' @param path The directory where the model is saved
+#' @param overwrite Overwrites or not if the output path already exists. Default is FALSE
+#'                  which means throw exception if the output path exists.
+#'
+#' @rdname spark.als
+#' @export
+#' @seealso \link{read.ml}
+#' @note write.ml(ALSModel, character) since 2.1.0
+setMethod("write.ml", signature(object = "ALSModel", path = "character"),
+function(object, path, overwrite = FALSE) {
+    writer <- callJMethod(object@jobj, "write")
+    if (overwrite) {
+        writer <- callJMethod(writer, "overwrite")
+    }
+    invisible(callJMethod(writer, "save", path))
+})
