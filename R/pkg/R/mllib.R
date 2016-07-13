@@ -67,6 +67,13 @@ setClass("GaussianMixtureModel", representation(jobj = "jobj"))
 #' @note ALSModel since 2.1.0
 setClass("ALSModel", representation(jobj = "jobj"))
 
+#' S4 class that represents an IsotonicRegressionModel
+#'
+#' @param jobj a Java object reference to the backing Scala IsotonicRegressionModel
+#' @export
+#' @note IsotonicRegressionModel since 2.1.0
+setClass("IsotonicRegressionModel", representation(jobj = "jobj"))
+
 #' Saves the MLlib model to the input path
 #'
 #' Saves the MLlib model to the input path. For more information, see the specific
@@ -317,6 +324,83 @@ setMethod("summary", signature(object = "NaiveBayesModel"),
             return(list(apriori = apriori, tables = tables))
           })
 
+#' Isotonic Regression Model
+#'
+#' Fits an Isotonic Regression model against a Spark DataFrame, similarly to R's isoreg().
+#' Users can print, make predictions on the produced model and save the model to the input path.
+#'
+#' @param data SparkDataFrame for training
+#' @param formula A symbolic description of the model to be fitted. Currently only a few formula
+#'                operators are supported, including '~', '.', ':', '+', and '-'.
+#' @param isotonic Whether the output sequence should be isotonic/increasing (true) or
+#'                 antitonic/decreasing (false)
+#' @param featureIndex The index of the feature if \code{featuresCol} is a vector column (default: `0`),
+#'                     no effect otherwise
+#' @param weightCol The weight column name.
+#' @return \code{spark.isoreg} returns a fitted Isotonic Regression model
+#' @rdname spark.isoreg
+#' @aliases spark.isoreg,SparkDataFrame,formula-method
+#' @name spark.isoreg
+#' @export
+#' @examples
+#' \dontrun{
+#' sparkR.session()
+#' data <- list(list(7.0, 0.0), list(5.0, 1.0), list(3.0, 2.0),
+#'         list(5.0, 3.0), list(1.0, 4.0))
+#' df <- createDataFrame(data, c("label", "feature"))
+#' model <- spark.isoreg(df, label ~ feature, isotonic = FALSE)
+#' # return model boundaries and prediction as lists
+#' result <- summary(model, df)
+#'
+#' # save fitted model to input path
+#' path <- "path/to/model"
+#' write.ml(model, path)
+#'
+#' # can also read back the saved model and print
+#' savedModel <- read.ml(path)
+#' summary(savedModel)
+#' }
+#' @note spark.isoreg since 2.1.0
+setMethod("spark.isoreg", signature(data = "SparkDataFrame", formula = "formula"),
+          function(data, formula, isotonic = TRUE, featureIndex = 0, weightCol = NULL) {
+            formula <- paste0(deparse(formula), collapse = "")
+
+            if (is.null(weightCol)) {
+              weightCol <- ""
+            }
+
+            jobj <- callJStatic("org.apache.spark.ml.r.IsotonicRegressionWrapper", "fit",
+            data@sdf, formula, as.logical(isotonic), as.integer(featureIndex), weightCol)
+            return(new("IsotonicRegressionModel", jobj = jobj))
+          })
+
+#  Predicted values based on an isotonicRegression model
+
+#' @param object a fitted isotonicRegressionModel
+#' @param newData SparkDataFrame for testing
+#' @return \code{predict} returns a SparkDataFrame containing predicted values
+#' @rdname spark.isoreg
+#' @export
+#' @note predict(isotonicRegressionModel) since 2.1.0
+setMethod("predict", signature(object = "IsotonicRegressionModel"),
+          function(object, newData) {
+            return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
+          })
+
+#  Get the summary of a isotonicRegressionModel model
+
+#' @return \code{summary} returns the model's boundaries and prediction as lists
+#' @rdname spark.isoreg
+#' @export
+#' @note summary(isotonicRegressionModel) since 2.1.0
+setMethod("summary", signature(object = "IsotonicRegressionModel"),
+          function(object, ...) {
+            jobj <- object@jobj
+            boundaries <- callJMethod(jobj, "boundaries")
+            predictions <- callJMethod(jobj, "predictions")
+            return(list(boundaries = boundaries, predictions = predictions))
+          })
+
 #' K-Means Clustering Model
 #'
 #' Fits a k-means clustering model against a Spark DataFrame, similarly to R's kmeans().
@@ -555,6 +639,7 @@ setMethod("write.ml", signature(object = "KMeansModel", path = "character"),
 #'
 #' @param object A fitted Decision tree regression model
 #  Save fitted MLlib model to the input path
+#  Save fitted isotonicRegressionModel to the input path
 #' @param path The directory where the model is saved
 #' @param overwrite Overwrites or not if the output path already exists. Default is FALSE
 #'                  which means throw exception if the output path exists.
@@ -569,17 +654,36 @@ setMethod("write.ml", signature(object = "KMeansModel", path = "character"),
 #' write.ml(model, path)
 #' }
 setMethod("write.ml", signature(object = "DecisionTreeRegressionModel", path = "character"),
+function(object, path, overwrite = FALSE) {
+    writer <- callJMethod(object@jobj, "write")
+    if (overwrite) {
+        writer <- callJMethod(writer, "overwrite")
+    }
+    invisible(callJMethod(writer, "save", path))
+})
 
 #' @rdname spark.mvnormalmixEM
 #' @export
 #' @note write.ml(GaussianMixtureModel, character) since 2.1.0
 setMethod("write.ml", signature(object = "GaussianMixtureModel", path = "character"),
+function(object, path, overwrite = FALSE) {
+    writer <- callJMethod(object@jobj, "write")
+    if (overwrite) {
+        writer <- callJMethod(writer, "overwrite")
+    }
+    invisible(callJMethod(writer, "save", path))
+})
+
+#' @rdname spark.isoreg
+#' @export
+#' @note write.ml(IsotonicRegression, character) since 2.0.0
+setMethod("write.ml", signature(object = "IsotonicRegressionModel", path = "character"),
           function(object, path, overwrite = FALSE) {
             writer <- callJMethod(object@jobj, "write")
             if (overwrite) {
               writer <- callJMethod(writer, "overwrite")
             }
-            invisible(callJMethod(writer, "save", path))
+           invisible(callJMethod(writer, "save", path))
           })
 
 #' Load a fitted MLlib model from the input path.
@@ -613,6 +717,8 @@ read.ml <- function(path) {
       return(new("GaussianMixtureModel", jobj = jobj))
   } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.ALSWrapper")) {
       return(new("ALSModel", jobj = jobj))
+  } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.IsotonicRegressionWrapper")) {
+      return(new("IsotonicRegressionModel", jobj = jobj))
   } else {
     stop(paste("Unsupported model: ", jobj))
   }

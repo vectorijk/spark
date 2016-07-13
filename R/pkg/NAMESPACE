@@ -27,7 +27,8 @@ exportMethods("glm",
               "spark.survreg",
               "spark.rpart",
               "spark.mvnormalmixEM",
-              "spark.als")
+              "spark.als",
+              "spark.isoreg")
 
 # Job group lifecycle management methods
 export("setJobGroup",
