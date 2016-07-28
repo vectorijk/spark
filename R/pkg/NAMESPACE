@@ -25,7 +25,8 @@ exportMethods("glm",
               "fitted",
               "spark.naiveBayes",
               "spark.survreg",
-              "spark.rpart")
+              "spark.rpart",
+              "spark.mvnormalmixEM")
 
 # Job group lifecycle management methods
 export("setJobGroup",

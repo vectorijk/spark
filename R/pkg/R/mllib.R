@@ -53,6 +53,13 @@ setClass("AFTSurvivalRegressionModel", representation(jobj = "jobj"))
 #' @note KMeansModel since 2.0.0
 setClass("KMeansModel", representation(jobj = "jobj"))
 
+#' S4 class that represents a GaussianMixtureModel
+#'
+#' @param jobj a Java object reference to the backing Scala GaussianMixtureModel
+#' @export
+#' @note GaussianMixtureModel since 2.1.0
+setClass("GaussianMixtureModel", representation(jobj = "jobj"))
+
 #' Saves the MLlib model to the input path
 #'
 #' Saves the MLlib model to the input path. For more information, see the specific
@@ -60,7 +67,7 @@ setClass("KMeansModel", representation(jobj = "jobj"))
 #' @rdname write.ml
 #' @name write.ml
 #' @export
-#' @seealso \link{spark.glm}, \link{glm}
+#' @seealso \link{spark.glm}, \link{glm}, \link{spark.mvnormalmixEM}
 #' @seealso \link{spark.kmeans}, \link{spark.naiveBayes}, \link{spark.survreg}
 #' @seealso \link{read.ml}
 NULL
@@ -72,7 +79,7 @@ NULL
 #' @rdname predict
 #' @name predict
 #' @export
-#' @seealso \link{spark.glm}, \link{glm}
+#' @seealso \link{spark.glm}, \link{glm}, \link{spark.mvnormalmixEM}
 #' @seealso \link{spark.kmeans}, \link{spark.naiveBayes}, \link{spark.survreg}
 NULL
 
@@ -536,6 +543,7 @@ setMethod("write.ml", signature(object = "KMeansModel", path = "character"),
 #' Save the Decision Tree Regression model to the input path.
 #'
 #' @param object A fitted Decision tree regression model
+#  Save fitted MLlib model to the input path
 #' @param path The directory where the model is saved
 #' @param overwrite Overwrites or not if the output path already exists. Default is FALSE
 #'                  which means throw exception if the output path exists.
@@ -550,6 +558,11 @@ setMethod("write.ml", signature(object = "KMeansModel", path = "character"),
 #' write.ml(model, path)
 #' }
 setMethod("write.ml", signature(object = "DecisionTreeRegressionModel", path = "character"),
+
+#' @rdname spark.mvnormalmixEM
+#' @export
+#' @note write.ml(GaussianMixtureModel, character) since 2.1.0
+setMethod("write.ml", signature(object = "GaussianMixtureModel", path = "character"),
           function(object, path, overwrite = FALSE) {
             writer <- callJMethod(object@jobj, "write")
             if (overwrite) {
@@ -585,6 +598,8 @@ read.ml <- function(path) {
       return(new("KMeansModel", jobj = jobj))
   } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.DecisionTreeRegressorWrapper")) {
       return(new("DecisionTreeRegressionModel", jobj = jobj))
+  } else if (isInstanceOf(jobj, "org.apache.spark.ml.r.GaussianMixtureWrapper")) {
+      return(new("GaussianMixtureModel", jobj = jobj))
   } else {
     stop(paste("Unsupported model: ", jobj))
   }
@@ -701,6 +716,113 @@ setMethod("summary", signature(object = "DecisionTreeRegressionModel"),
           })
 
 setMethod("predict", signature(object = "DecisionTreeRegressionModel"),
+          function(object, newData) {
+            return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
+          })
+
+#' Multivariate Gaussian Mixture Model (GMM)
+#'
+#' Fits multivariate gaussian mixture model against a Spark DataFrame, similarly to R's
+#' mvnormalmixEM(). Users can call \code{summary} to print a summary of the fitted model,
+#' \code{predict} to make predictions on new data, and \code{write.ml}/\code{read.ml}
+#' to save/load fitted models.
+#'
+#' @param data SparkDataFrame for training
+#' @param formula A symbolic description of the model to be fitted. Currently only a few formula
+#'                operators are supported, including '~', '.', ':', '+', and '-'.
+#'                Note that the response variable of formula is empty in spark.mvnormalmixEM.
+#' @param k Number of independent Gaussians in the mixture model.
+#' @param maxIter Maximum iteration number
+#' @param tol The convergence tolerance
+#' @aliases spark.mvnormalmixEM,SparkDataFrame,formula-method
+#' @return \code{spark.mvnormalmixEM} returns a fitted multivariate gaussian mixture model
+#' @rdname spark.mvnormalmixEM
+#' @name spark.mvnormalmixEM
+#' @seealso mixtools: \url{https://cran.r-project.org/web/packages/mixtools/}
+#' @export
+#' @examples
+#' \dontrun{
+#' sparkR.session()
+#' library(mvtnorm)
+#' set.seed(100)
+#' a <- rmvnorm(4, c(0, 0))
+#' b <- rmvnorm(6, c(3, 4))
+#' data <- rbind(a, b)
+#' df <- createDataFrame(as.data.frame(data))
+#' model <- spark.mvnormalmixEM(df, ~ V1 + V2, k = 2)
+#' summary(model)
+#'
+#' # fitted values on training data
+#' fitted <- predict(model, df)
+#' head(select(fitted, "V1", "prediction"))
+#'
+#' # save fitted model to input path
+#' path <- "path/to/model"
+#' write.ml(model, path)
+#'
+#' # can also read back the saved model and print
+#' savedModel <- read.ml(path)
+#' summary(savedModel)
+#' }
+#' @note spark.mvnormalmixEM since 2.1.0
+#' @seealso \link{predict}, \link{read.ml}, \link{write.ml}
+setMethod("spark.mvnormalmixEM", signature(data = "SparkDataFrame", formula = "formula"),
+          function(data, formula, k = 2, maxIter = 100, tol = 0.01) {
+            formula <- paste(deparse(formula), collapse = "")
+            jobj <- callJStatic("org.apache.spark.ml.r.GaussianMixtureWrapper", "fit", data@sdf,
+                                formula, as.integer(k), as.integer(maxIter), tol)
+            return(new("GaussianMixtureModel", jobj = jobj))
+          })
+
+#  Get the summary of a multivariate gaussian mixture model
+
+#' @param object A fitted gaussian mixture model
+#' @return \code{summary} returns the model's lambda, mu, sigma and posterior
+#' @aliases spark.mvnormalmixEM,SparkDataFrame,formula-method
+#' @rdname spark.mvnormalmixEM
+#' @export
+#' @note summary(GaussianMixtureModel) since 2.1.0
+setMethod("summary", signature(object = "GaussianMixtureModel"),
+          function(object, ...) {
+            jobj <- object@jobj
+            is.loaded <- callJMethod(jobj, "isLoaded")
+            lambda <- unlist(callJMethod(jobj, "lambda"))
+            muList <- callJMethod(jobj, "mu")
+            sigmaList <- callJMethod(jobj, "sigma")
+            k <- callJMethod(jobj, "k")
+            dim <- callJMethod(jobj, "dim")
+            mu <- c()
+            for (i in 1 : k) {
+              start <- (i - 1) * dim + 1
+              end <- i * dim
+              mu[[i]] <- unlist(muList[start : end])
+            }
+            sigma <- c()
+            for (i in 1 : k) {
+              start <- (i - 1) * dim * dim + 1
+              end <- i * dim * dim
+              sigma[[i]] <- t(matrix(sigmaList[start : end], ncol = dim))
+            }
+            posterior <- if (is.loaded) {
+              NULL
+            } else {
+              dataFrame(callJMethod(jobj, "posterior"))
+            }
+            return(list(lambda = lambda, mu = mu, sigma = sigma,
+                   posterior = posterior, is.loaded = is.loaded))
+          })
+
+#  Predicted values based on a gaussian mixture model
+
+#' @param newData SparkDataFrame for testing
+#' @return \code{predict} returns a SparkDataFrame containing predicted labels in a column named
+#'         "prediction"
+#' @return \code{predict} returns the predicted values based on a gaussian mixture model
+#' @aliases spark.mvnormalmixEM,SparkDataFrame,formula-method
+#' @rdname spark.mvnormalmixEM
+#' @export
+#' @note predict(GaussianMixtureModel) since 2.1.0
+setMethod("predict", signature(object = "GaussianMixtureModel"),
           function(object, newData) {
             return(dataFrame(callJMethod(object@jobj, "transform", newData@sdf)))
           })
