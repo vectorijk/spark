@@ -1,3 +1,35 @@
+Apache Spark: Exposing more R and Python APIs for MLlib
+
+Kai Jiang
+
+This branch is for [CS561](http://wiki.cs.pdx.edu/oss2016/index.html) project. Also, this project is a GSoC project.
+
+Email: jiangkai@gmail.com
+
+Description:
+R has become the most popular language for data scientists. Currently, SparkR supports very
+few MLlib algorithms, limiting its utility for data scientists. This project mainly concerns exposing and implementing R APIs for MLlib.
+
+R APIs for MLlib I have done are:
+Gaussian Mixture Model wrapper
+Alternating Least Squares (ALS) wrapper
+LDA wrapper
+Isotonic Regression wrapper
+Decision Tree wrapper
+
+Code:
+The Code changes is here(https://github.com/vectorijk/spark/commits/dev?author=vectorijk)
+
+License:
+The changes I have done are under Apache license.
+
+Documentation:
+Documentation is code inlined.
+
+Build instructions:
+`git checkout dev`
+`build/mvn -Pyarn -Phadoop-2.4 -Dhadoop.version=2.4.0 -Phive -Phive-thriftserver -Psparkr -DskipTests -T 1C clean package`
+
 # Apache Spark
 
 Spark is a fast and general cluster computing system for Big Data. It provides
