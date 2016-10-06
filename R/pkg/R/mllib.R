@@ -117,9 +117,9 @@ setClass("DecisionTreeClassificationModel", representation(jobj = "jobj"))
 #' @name write.ml
 #' @export
 #' @seealso \link{spark.glm}, \link{glm},
-#' @seealso \link{spark.als}, \link{spark.gaussianMixture}, \link{spark.isoreg}, \link{spark.kmeans},
-#' @seealso \link{spark.lda}, \link{spark.mlp}, \link{spark.naiveBayes}, \link{spark.survreg},
-#' @seealso \link{spark.decisionTree},
+#' @seealso \link{spark.als}, link{spark.decisionTree}, \link{spark.gaussianMixture},
+#' @seealso \link{spark.isoreg}, \link{spark.kmeans}, \link{spark.lda}, \link{spark.mlp},
+#' @seealso \link{spark.naiveBayes}, \link{spark.survreg},
 #' @seealso \link{read.ml}
 NULL
 
@@ -131,8 +131,9 @@ NULL
 #' @name predict
 #' @export
 #' @seealso \link{spark.glm}, \link{glm},
-#' @seealso \link{spark.als}, \link{spark.gaussianMixture}, \link{spark.isoreg}, \link{spark.kmeans},
-#' @seealso \link{spark.mlp}, \link{spark.naiveBayes}, \link{spark.survreg}, \link{spark.decisionTree}
+#' @seealso \link{spark.als}, \link{spark.decisionTree}, \link{spark.gaussianMixture},
+#' @seealso \link{spark.isoreg}, \link{spark.kmeans}, \link{spark.mlp}, \link{spark.naiveBayes},
+#' @seealso \link{spark.survreg},
 NULL
 
 write_internal <- function(object, path, overwrite = FALSE) {
@@ -1474,7 +1475,7 @@ print.summary.KSTest <- function(x, ...) {
 #' df <- createDataFrame(longley)
 #'
 #' # fit a Decision Tree Regression Model
-#' model <- spark.decisionTree(data, Employed~., "regression", maxDepth=5, maxBins=16)
+#' model <- spark.decisionTree(data, Employed ~ ., type = "regression", maxDepth = 5, maxBins = 16)
 #'
 #' # get the summary of the model
 #' summary(model)
@@ -1490,17 +1491,24 @@ print.summary.KSTest <- function(x, ...) {
 #' }
 #' @note spark.decisionTree since 2.1.0
 setMethod("spark.decisionTree", signature(data = "SparkDataFrame", formula = "formula"),
-          function(data, formula, type = c("regression", "classification"), maxDepth = 5, maxBins = 32 ) {
+          function(data, formula, type = c("regression", "classification"),
+                   maxDepth = 5, maxBins = 32 ) {
+            type <- match.arg(type)
             formula <- paste(deparse(formula), collapse = "")
-            if (identical(type, "regression")) {
-              jobj <- callJStatic("org.apache.spark.ml.r.DecisionTreeRegressorWrapper", "fit",
-                                  data@sdf, formula, as.integer(maxDepth), as.integer(maxBins))
-              new("DecisionTreeRegressionModel", jobj = jobj)
-            } else if (identical(type, "classification")) {
-              jobj <- callJStatic("org.apache.spark.ml.r.DecisionTreeClassifierWrapper", "fit",
-                                  data@sdf, formula, as.integer(maxDepth), as.integer(maxBins))
-              new("DecisionTreeClassificationModel", jobj = jobj)
-            }
+            switch(type,
+                   regression =  {
+                     jobj <- callJStatic("org.apache.spark.ml.r.DecisionTreeRegressorWrapper",
+                                         "fit", data@sdf, formula, as.integer(maxDepth),
+                                         as.integer(maxBins))
+                     new("DecisionTreeRegressionModel", jobj = jobj)
+                   },
+                   classification = {
+                     jobj <- callJStatic("org.apache.spark.ml.r.DecisionTreeClassifierWrapper",
+                                         "fit", data@sdf, formula, as.integer(maxDepth),
+                                         as.integer(maxBins))
+                     new("DecisionTreeClassificationModel", jobj = jobj)
+                   }
+            )
           })
 
 # Makes predictions from a Decision Tree Regression model or
@@ -1517,12 +1525,6 @@ setMethod("predict", signature(object = "DecisionTreeRegressionModel"),
             predict_internal(object, newData)
           })
 
-# Makes predictions from a Decision Tree Classification model or
-# a model produced by spark.decisionTree()
-
-#' @param newData a SparkDataFrame for testing.
-#' @return \code{predict} returns a SparkDataFrame containing predicted labeled in a column named
-#' "prediction"
 #' @rdname spark.decisionTree
 #' @export
 #' @note predict(decisionTreeClassificationModel) since 2.1.0
@@ -1565,9 +1567,9 @@ setMethod("write.ml", signature(object = "DecisionTreeClassificationModel", path
 
 #  Get the summary of an DecisionTreeRegressionModel model
 
-#' @param object a fitted DecisionTreeRegressionModel
-#' @param ... Other optional arguments to summary of a DecisionTreeRegressionModel
+#' @param object a fitted DecisionTreeRegressionModel or DecisionTreeClassificationModel
 #' @return \code{summary} returns the model's features as lists, depth and number of nodes
+#'                        or number of classes.
 #' @rdname spark.decisionTree
 #' @aliases summary,DecisionTreeRegressionModel-method
 #' @export
@@ -1578,52 +1580,51 @@ setMethod("summary", signature(object = "DecisionTreeRegressionModel"),
             features <- callJMethod(jobj, "features")
             depth <- callJMethod(jobj, "depth")
             numNodes <- callJMethod(jobj, "numNodes")
-            ans <- list(features = features, depth = depth, numNodes = numNodes)
+            ans <- list(features = features, depth = depth, numNodes = numNodes, jobj = jobj)
             class(ans) <- "summary.DecisionTreeRegressionModel"
             ans
           })
 
 #  Get the summary of an DecisionTreeClassificationModel model
 
-#' @param object a fitted DecisionTreeClassificationModel
-#' @param ... Other optional arguments to summary of a DecisionTreeClassificationModel
-#' @return \code{summary} returns the model's features as lists, depth and number of nodes
 #' @rdname spark.decisionTree
 #' @aliases summary,DecisionTreeClassificationModel-method
 #' @export
-#' @note summary(DecisionTreeRegressionModel) since 2.1.0
+#' @note summary(DecisionTreeClassificationModel) since 2.1.0
 setMethod("summary", signature(object = "DecisionTreeClassificationModel"),
-function(object, ...) {
-    jobj <- object@jobj
-    features <- callJMethod(jobj, "features")
-    depth <- callJMethod(jobj, "depth")
-    numNodes <- callJMethod(jobj, "numNodes")
-    ans <- list(features = features, depth = depth, numNodes = numNodes)
-    class(ans) <- "summary.DecisionTreeClassificationModel"
-    ans
-})
+          function(object, ...) {
+              jobj <- object@jobj
+              features <- callJMethod(jobj, "features")
+              depth <- callJMethod(jobj, "depth")
+              numNodes <- callJMethod(jobj, "numNodes")
+              numClasses <- callJMethod(jobj, "numClasses")
+              ans <- list(features = features, depth = depth,
+                          numNodes = numNodes, numClasses = numClasses, jobj = jobj)
+              class(ans) <- "summary.DecisionTreeClassificationModel"
+              ans
+          })
 
 #  Prints the summary of Decision Tree Regression Model
 
 #' @rdname spark.decisionTree
-#' @param x summary object of decisionTreeRegressionModel returned by \code{summary}.
+#' @param x summary object of decisionTreeRegressionModel or decisionTreeClassificationModel
+#'          returned by \code{summary}.
 #' @export
 #' @note print.summary.DecisionTreeRegressionModel since 2.1.0
 print.summary.DecisionTreeRegressionModel <- function(x, ...) {
-  jobj <- x@jobj
-  summaryStr <- callJMethod(jobj, "summary")
-  cat(summaryStr, "\n")
-  invisible(x)
-  }
+    jobj <- x$jobj
+    summaryStr <- callJMethod(jobj, "summary")
+    cat(summaryStr, "\n")
+    invisible(x)
+}
 
 #  Prints the summary of Decision Tree Classification Model
 
 #' @rdname spark.decisionTree
-#' @param x summary object of decisionTreeClassificationModel returned by \code{summary}.
 #' @export
 #' @note print.summary.DecisionTreeClassificationModel since 2.1.0
 print.summary.DecisionTreeClassificationModel <- function(x, ...) {
-    jobj <- x@jobj
+    jobj <- x$jobj
     summaryStr <- callJMethod(jobj, "summary")
     cat(summaryStr, "\n")
     invisible(x)

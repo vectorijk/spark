@@ -793,7 +793,7 @@ test_that("spark.kstest", {
 
 test_that("spark.decisionTree Regression", {
   data <- suppressWarnings(createDataFrame(longley))
-  model <- spark.decisionTree(data, Employed~., "regression", maxDepth=5, maxBins=16)
+  model <- spark.decisionTree(data, Employed ~ ., "regression", maxDepth = 5, maxBins = 16)
 
   #Test summary
   stats <- summary(model)
@@ -817,6 +817,31 @@ test_that("spark.decisionTree Regression", {
   stats2 <- summary(model2)
   expect_equal(stats$depth, stats2$depth)
   expect_equal(stats$numNodes, stats2$numNodes)
+
+  unlink(modelPath)
+})
+
+test_that("spark.decisionTree Classification", {
+  data <- suppressWarnings(createDataFrame(iris))
+  model <- spark.decisionTree(data, Species ~ Petal_Length + Petal_Width, "classification",
+                              maxDepth = 5, maxBins = 16)
+
+  #Test summary
+  stats <- summary(model)
+  expect_equal(stats$depth, 5)
+  expect_equal(stats$numNodes, 19)
+  expect_equal(stats$numClasses, 3)
+
+  # Test model save/load
+  modelPath <- tempfile(pattern = "spark-decisionTreeClassification", fileext = ".tmp")
+  write.ml(model, modelPath)
+  expect_error(write.ml(model, modelPath))
+  write.ml(model, modelPath, overwrite = TRUE)
+  model2 <- read.ml(modelPath)
+  stats2 <- summary(model2)
+  expect_equal(stats$depth, stats2$depth)
+  expect_equal(stats$numNodes, stats2$numNodes)
+  expect_equal(stats$numClasses, stats2$numClasses)
 
   unlink(modelPath)
 })
